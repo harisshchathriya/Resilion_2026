@@ -1,0 +1,97 @@
+.idle-container {
+  background: #f5f6fa;
+  height: 100vh;
+}
+
+.icons img {
+  border-radius: 50%;
+  margin-left: 10px;
+}
+
+.idle-content {
+  display: grid;
+  grid-template-columns: 30% 70%;
+  height: calc(100vh - 160px);
+}
+
+.idle-list {
+  padding: 20px;
+  background: white;
+}
+
+.idle-list input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  margin-bottom: 15px;
+  border: 1px solid #ccc;
+}
+
+.list-scroll {
+  overflow-y: auto;
+  max-height: 100%;
+}
+
+.vehicle-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.vehicle-card:hover {
+  transform: translateY(-2px);
+}
+
+
+.vehicle-card.selected {
+  background: rgba(118, 0, 188, 0.12);
+}
+
+.badge.yellow { background: gold; }
+.badge.orange { background: orange; }
+.badge.red { background: red; color: white; }
+
+.map-section {
+  position: relative;
+}
+
+.info-card {
+  text-align: center;
+}
+
+.info-card img {
+  border-radius: 50%;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.primary {
+  background: linear-gradient(90deg, #7600bc, #8a00c2);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+}
+
+.outline {
+  border: 1px solid #7600bc;
+  color: #7600bc;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: none;
+}
+
+@media (max-width: 768px) {
+  .idle-content {
+    grid-template-columns: 1fr;
+  }
+}

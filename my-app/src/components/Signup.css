@@ -1,0 +1,144 @@
+/* Page background */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: radial-gradient(
+    circle at top,
+    #1b0030,
+    #090012 70%
+  );
+  font-family: "Inter", Arial, sans-serif;
+}
+
+/* Auth Card */
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 42px;
+  border-radius: 22px;
+
+  /* 🔥 Dynamic gradient card */
+  background: linear-gradient(
+    160deg,
+    rgba(118, 0, 188, 0.45),
+    rgba(138, 0, 194, 0.25),
+    rgba(27, 0, 48, 0.9)
+  );
+
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 30px 70px rgba(118, 0, 188, 0.55),
+    inset 0 0 30px rgba(138, 0, 194, 0.15);
+
+  text-align: center;
+}
+
+/* Heading */
+.auth-card h2 {
+  font-size: 30px;
+  margin-bottom: 8px;
+  color: #7600bc;
+  font-weight: 700;
+}
+
+/* 🔥 STRONG GRADIENT FOR "Create" */
+.auth-card h2 span {
+  background: linear-gradient(
+    135deg,
+    #7600bc,
+    #8a00c2,
+    #00e0c6
+  );
+  background-size: 200% 200%;
+  animation: gradientMove 4s ease infinite;
+
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+
+/* Gradient animation */
+@keyframes gradientMove {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.subtitle {
+  font-size: 14px;
+  color: #dddddd;
+  margin-bottom: 32px;
+}
+
+/* Inputs */
+.input-group {
+  margin-bottom: 20px;
+}
+
+.input-group input {
+  width: 100%;
+  padding: 15px 16px;
+  border-radius: 12px;
+  border: none;
+  outline: none;
+  font-size: 14px;
+
+  background: rgba(255, 255, 255, 0.14);
+  color: white;
+}
+
+.input-group input::placeholder {
+  color: #e0e0e0;
+}
+
+/* Button */
+.auth-btn {
+  width: 100%;
+  padding: 15px;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 15px;
+  color: white;
+
+  background: linear-gradient(
+    135deg,
+    #7600bc,
+    #8a00c2
+  );
+
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.auth-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 40px rgba(118, 0, 188, 0.65);
+}
+
+/* Switch text */
+.switch-text {
+  margin-top: 24px;
+  font-size: 14px;
+  color: #e0e0e0;
+}
+
+.switch-text a {
+  color: #c77dff;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.switch-text a:hover {
+  text-decoration: underline;
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .auth-card {
+    padding: 32px 24px;
+  }
+}

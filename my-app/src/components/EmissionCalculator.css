@@ -1,0 +1,263 @@
+* {
+  box-sizing: border-box;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+/* ================= TOP HEADER ================= */
+
+.top-header {
+  background: linear-gradient(90deg, #7600bc, #8a00c2);
+  color: white;
+  padding: 18px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 26px;
+}
+
+.brand span {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.top-icons {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: white;
+  color: #7600bc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ================= PROFILE ================= */
+
+.profile-wrapper {
+  position: relative;
+}
+
+.profile-dropdown {
+  position: absolute;
+  right: 0;
+  top: 46px;
+  background: white;
+  width: 180px;
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.15);
+  overflow: hidden;
+}
+
+.profile-preview {
+  padding: 12px;
+  background: #f3f3f9;
+  font-weight: 600;
+}
+
+.profile-dropdown button {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-dropdown button:hover {
+  background: #f0eef7;
+}
+
+.logout {
+  color: #c0392b;
+}
+
+/* ================= NAV PILLS ================= */
+
+.nav-pills {
+  background: #f5f6fa;
+  padding: 18px;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.nav-pills button {
+  background: white;
+  border: none;
+  padding: 10px 22px;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.nav-pills button.active {
+  background: linear-gradient(90deg, #7600bc, #8a00c2);
+  color: white;
+  box-shadow: 0 0 14px rgba(138,0,194,0.6);
+}
+
+/* ================= PAGE ================= */
+
+.ec-page {
+  background: #f5f6fa;
+  min-height: 100vh;
+  padding: 25px;
+}
+
+/* OVERVIEW */
+
+.ec-overview {
+  margin-bottom: 20px;
+}
+
+/* METRICS */
+
+.ec-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px,1fr));
+  gap: 18px;
+}
+
+.metric-card {
+  background: white;
+  padding: 18px;
+  border-radius: 16px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+}
+
+/* CHARTS */
+
+.ec-charts {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 18px;
+  margin-top: 25px;
+}
+
+.chart-card {
+  background: white;
+  padding: 20px;
+  border-radius: 16px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+}
+
+.mock-line-chart {
+  height: 160px;
+  position: relative;
+}
+
+.baseline {
+  position: absolute;
+  top: 45%;
+  width: 100%;
+  border-top: 2px dotted #bbb;
+}
+
+.optimized {
+  position: absolute;
+  top: 60%;
+  width: 100%;
+  border-top: 3px solid #7600bc;
+}
+
+.legend {
+  margin-top: 10px;
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.baseline-dot { background: #bbb; }
+.optimized-dot { background: #7600bc; }
+
+/* BAR CHART */
+
+.bar-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  height: 160px;
+}
+
+.bar {
+  width: 100%;
+  background: #8a00c2;
+  border-radius: 6px 6px 0 0;
+}
+
+.bar.best {
+  background: #00c97b;
+}
+
+/* TABLE */
+
+.ec-table {
+  margin-top: 30px;
+}
+
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.export-btn {
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(90deg,#7600bc,#8a00c2);
+  color: white;
+}
+
+table {
+  width: 100%;
+  background: white;
+  border-radius: 14px;
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: 14px;
+}
+
+tr:hover {
+  background: #f6f4fb;
+}
+
+.badge {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.high-savings { background:#d5f6e7; color:#0a8f5c; }
+.optimized { background:#ede0ff; color:#6a00c8; }
+.standard { background:#eee; color:#555; }
+
+/* RESPONSIVE */
+
+@media (max-width: 900px) {
+  .ec-charts {
+    grid-template-columns: 1fr;
+  }
+}
