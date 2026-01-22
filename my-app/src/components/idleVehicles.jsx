@@ -27,7 +27,7 @@ const idleVehicles = [
   },
 ];
 
-export default function idleVehicles() {
+export default function IdleVehicles() {
   const navigate = useNavigate();
   const location = useLocation(); // ✅ IMPORTANT
   const [selected, setSelected] = useState(idleVehicles[0]);
