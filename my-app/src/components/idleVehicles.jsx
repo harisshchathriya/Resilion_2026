@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { GoogleMap, Marker, InfoWindow, LoadScript } from "@react-google-maps/api";
-import "./IdleVehicles.css";
+import "./idleVehicles.css";
 
 const idleVehicles = [
   {
@@ -27,7 +27,7 @@ const idleVehicles = [
   },
 ];
 
-export default function IdleVehicles() {
+export default function idleVehicles() {
   const navigate = useNavigate();
   const location = useLocation(); // ✅ IMPORTANT
   const [selected, setSelected] = useState(idleVehicles[0]);
@@ -57,7 +57,7 @@ export default function IdleVehicles() {
           className={`nav-btn ${isActive("/idle-vehicles") ? "active" : ""}`}
           onClick={() => navigate("/idle-vehicles")}
         >
-          Idle Vehicles
+          idle Vehicles
         </button>
 
         <button
@@ -93,7 +93,7 @@ export default function IdleVehicles() {
       <div className="idle-content">
         {/* LEFT PANEL */}
         <aside className="idle-list">
-          <h2>Idle Vehicles</h2>
+          <h2>idle Vehicles</h2>
           <input placeholder="Search fleet ID or driver..." />
 
           <div className="list-scroll">
@@ -136,7 +136,7 @@ export default function IdleVehicles() {
                 <div className="info-card">
                   <h4>{selected.driver}</h4>
                   <p>{selected.phone}</p>
-                  <span>Idle for {selected.idleMins} mins</span>
+                  <span>idle for {selected.idleMins} mins</span>
                 </div>
               </InfoWindow>
             </GoogleMap>
