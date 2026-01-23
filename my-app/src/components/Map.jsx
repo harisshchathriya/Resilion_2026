@@ -78,6 +78,8 @@ const cities = {
   "Hosur Cold Storage": { lat: 12.7406, lng: 77.8253 },
   "Salem Warehouse": { lat: 11.6643, lng: 78.1460 },
   "Chennai Central WH": { lat: 13.0827, lng: 80.2707 },
+  "Salem": { lat: 11.6643, lng: 78.1460 },
+  "Vellore": { lat: 12.9165, lng: 79.1325 },
 };
 
 // City name normalization for matching
@@ -116,8 +118,8 @@ const matchCityToCoordinates = (cityName) => {
 };
 
 function AdvancedMap() {
-  const [origin, setOrigin] = useState("");
-  const [destination, setDestination] = useState("");
+  const [origin, setOrigin] = useState("Salem");
+  const [destination, setDestination] = useState("Vellore");
   const [directionsResult, setDirectionsResult] = useState(null);
   const [activeRouteIndex, setActiveRouteIndex] = useState(0);
   const [truckPosition, setTruckPosition] = useState(null);
@@ -134,7 +136,7 @@ function AdvancedMap() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [driverName, setDriverName] = useState("");
-  const [autoFilled, setAutoFilled] = useState(false);
+  const [autoFilled, setAutoFilled] = useState(true);
   const [routeInfo, setRouteInfo] = useState(null);
   
   const directionsServiceRef = useRef(null);
@@ -142,95 +144,29 @@ function AdvancedMap() {
 
   /* -------------------- SUPABASE LOGIC -------------------- */
   useEffect(() => {
-    const syncShipmentToDriver = async () => {
-      console.log("🔄 Syncing shipment → driver");
-
-      // 1️⃣ Get logged-in user
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-      console.log("👤 USER:", user, userError);
-      if (!user) {
-        // If no user, try to get all shipments
-        const { data: shipments } = await supabase
-          .from("shipments")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(1);
+    // Set static values
+    setOrigin("Salem");
+    setDestination("Vellore");
+    setAutoFilled(true);
+    setLoading(false);
+    
+    // Get driver name from Supabase
+    const syncDriverName = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: driver } = await supabase
+          .from("drivers")
+          .select("id, name")
+          .eq("email", user.email)
+          .maybeSingle();
         
-        if (shipments && shipments.length > 0) {
-          setOrigin(shipments[0].source || "");
-          setDestination(shipments[0].destination || "");
-          setDriverName(shipments[0].driver_name || "");
-          setAutoFilled(true);
+        if (driver) {
+          setDriverName(driver.name || "");
         }
-        setLoading(false);
-        return;
       }
-
-      // 2️⃣ Get driver by email
-      const { data: driver, error: driverError } = await supabase
-        .from("drivers")
-        .select("id, name")
-        .eq("email", user.email)
-        .maybeSingle();
-
-      console.log("🚚 DRIVER:", driver, driverError);
-      if (!driver) {
-        // If no driver found, get any shipment
-        const { data: shipments } = await supabase
-          .from("shipments")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(1);
-        
-        if (shipments && shipments.length > 0) {
-          setOrigin(shipments[0].source || "");
-          setDestination(shipments[0].destination || "");
-          setDriverName(shipments[0].driver_name || "");
-          setAutoFilled(true);
-        }
-        setLoading(false);
-        return;
-      }
-
-      // 3️⃣ Get shipment where driver_name === driver.name
-      const { data: shipment, error: shipmentError } = await supabase
-        .from("shipments")
-        .select("source, destination, driver_name")
-        .eq("driver_name", driver.name)
-        .maybeSingle();
-
-      console.log("📦 SHIPMENT:", shipment, shipmentError);
-      if (!shipment) {
-        setLoading(false);
-        return;
-      }
-
-      // 4️⃣ UPDATE drivers table
-      const { error: updateError } = await supabase
-        .from("drivers")
-        .update({
-          source: shipment.source,
-          destination: shipment.destination,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", driver.id);
-
-      if (updateError) {
-        console.error("❌ Update failed:", updateError);
-      } else {
-        console.log("✅ Driver table updated");
-      }
-
-      // 5️⃣ Update UI state
-      setOrigin(shipment.source || "");
-      setDestination(shipment.destination || "");
-      setDriverName(shipment.driver_name || "");
-      setAutoFilled(true);
-      setLoading(false);
     };
-
-    syncShipmentToDriver();
+    
+    syncDriverName();
   }, []);
 
   // Handle script load
@@ -394,8 +330,13 @@ function AdvancedMap() {
   const refreshData = async () => {
     setLoading(true);
     
-    const { data: { user } } = await supabase.auth.getUser();
+    // Reset to static values
+    setOrigin("Salem");
+    setDestination("Vellore");
+    setAutoFilled(true);
     
+    // Only refresh driver name
+    const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data: driver } = await supabase
         .from("drivers")
@@ -404,18 +345,7 @@ function AdvancedMap() {
         .maybeSingle();
       
       if (driver) {
-        const { data: shipment } = await supabase
-          .from("shipments")
-          .select("source, destination, driver_name")
-          .eq("driver_name", driver.name)
-          .maybeSingle();
-        
-        if (shipment) {
-          setOrigin(shipment.source || "");
-          setDestination(shipment.destination || "");
-          setDriverName(shipment.driver_name || "");
-          setAutoFilled(true);
-        }
+        setDriverName(driver.name || "");
       }
     }
     
@@ -495,7 +425,7 @@ function AdvancedMap() {
             <div style={{ textAlign: "center", padding: "20px" }}>
               <p>Loading data from Supabase...</p>
             </div>
-          ) : autoFilled ? (
+          ) : (
             <div style={{ 
               padding: "10px", 
               backgroundColor: "#e8f5e9", 
@@ -516,7 +446,7 @@ function AdvancedMap() {
                 }}>
                   ✓
                 </div>
-                <span style={{ color: "#2e7d32", fontWeight: "bold" }}>Data Auto-filled from Supabase</span>
+                <span style={{ color: "#2e7d32", fontWeight: "bold" }}>Route Pre-configured (Salem → Vellore)</span>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: "15px", alignItems: "center" }}>
                 <div style={{ textAlign: "center" }}>
@@ -536,15 +466,6 @@ function AdvancedMap() {
                 </div>
               </div>
             </div>
-          ) : (
-            <div style={{ textAlign: "center", padding: "10px", color: "#666" }}>
-              <p>No shipment data found. Please ensure:</p>
-              <p style={{ fontSize: "12px" }}>
-                1. You are logged in<br />
-                2. Driver exists in drivers table<br />
-                3. Shipment exists with matching driver_name
-              </p>
-            </div>
           )}
         </div>
 
@@ -557,7 +478,7 @@ function AdvancedMap() {
           border: "2px solid #ff9800"
         }}>
           <h4 style={{ margin: "0 0 15px 0", color: "#e65100", display: "flex", alignItems: "center", gap: "8px" }}>
-            📍 Route Information {autoFilled && <span style={{ fontSize: "12px", backgroundColor: "#4caf50", color: "white", padding: "2px 8px", borderRadius: "10px" }}>Auto-filled</span>}
+            📍 Route Information <span style={{ fontSize: "12px", backgroundColor: "#4caf50", color: "white", padding: "2px 8px", borderRadius: "10px" }}>Fixed Route</span>
           </h4>
           
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}>
@@ -571,22 +492,22 @@ function AdvancedMap() {
                 <input
                   type="text"
                   value={origin}
-                  onChange={(e) => setOrigin(e.target.value)}
-                  placeholder="Enter source city"
+                  readOnly
                   style={{
                     padding: "10px 10px 10px 40px",
                     borderRadius: "8px",
-                    border: `2px solid ${autoFilled ? "#4caf50" : "#ccc"}`,
+                    border: "2px solid #4caf50",
                     width: "100%",
                     fontSize: "16px",
-                    backgroundColor: autoFilled ? "#f1f8e9" : "white"
+                    backgroundColor: "#f1f8e9",
+                    cursor: "not-allowed"
                   }}
                 />
                 <FaMapMarkerAlt style={{
                   position: "absolute",
                   top: "12px",
                   left: "12px",
-                  color: autoFilled ? "#4caf50" : "#666"
+                  color: "#4caf50"
                 }} />
               </div>
             </div>
@@ -601,22 +522,22 @@ function AdvancedMap() {
                 <input
                   type="text"
                   value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  placeholder="Enter destination city"
+                  readOnly
                   style={{
                     padding: "10px 10px 10px 40px",
                     borderRadius: "8px",
-                    border: `2px solid ${autoFilled ? "#4caf50" : "#ccc"}`,
+                    border: "2px solid #4caf50",
                     width: "100%",
                     fontSize: "16px",
-                    backgroundColor: autoFilled ? "#f1f8e9" : "white"
+                    backgroundColor: "#f1f8e9",
+                    cursor: "not-allowed"
                   }}
                 />
                 <FaFlagCheckered style={{
                   position: "absolute",
                   top: "12px",
                   left: "12px",
-                  color: autoFilled ? "#f44336" : "#666"
+                  color: "#f44336"
                 }} />
               </div>
             </div>

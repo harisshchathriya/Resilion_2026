@@ -1,201 +1,176 @@
-import React, { useState } from "react";
-import "./EmissionCalculator.css";
+import { useState } from "react";
+import { supabase } from "../supabase";
+import { useNavigate } from "react-router-dom";
+import "./CreateShipment.css";
 
-export default function EmissionCalculator() {
-  const [showProfile, setShowProfile] = useState(false);
+export default function CreateShipment() {
+  const navigate = useNavigate();
 
-  /* ---------------- MOCK DATA ---------------- */
+  const [form, setForm] = useState({
+    truck_name: "",
+    source: "",
+    destination: "",
+  });
 
-  const metrics = [
-    {
-      title: "Optimized Route Distance",
-      value: "1,245 km",
-      sub: "+12% shorter vs baseline routes",
-    },
-    {
-      title: "Emission Factor",
-      value: "0.18 kg CO₂ / km",
-      sub: "Average per km across active fleet",
-    },
-    {
-      title: "Vehicle Load",
-      value: "8.2 tons",
-      sub: "82% of capacity",
-    },
-    {
-      title: "Total CO₂ Emissions",
-      value: "2,430 kg CO₂",
-      sub: "+2.4% vs target this period",
-    },
-    {
-      title: "Carbon Credits Earned",
-      value: "145",
-      sub: "Based on reduced emissions",
-    },
+  const [assignedDriver, setAssignedDriver] = useState(null);
+  const [showPopup, setShowPopup] = useState(false);
+
+  /* Tamil Nadu Cities */
+  const cities = [
+    "Chennai",
+    "Coimbatore",
+    "Madurai",
+    "Trichy",
+    "Salem",
+    "Erode",
+    "Tirunelveli",
+    "Vellore",
+    "Thoothukudi",
+    "Thanjavur",
   ];
 
-  const utilization = [
-    { id: "V-01", value: 60 },
-    { id: "V-02", value: 80 },
-    { id: "V-03", value: 45 },
-    { id: "V-04", value: 90, best: true },
-    { id: "V-05", value: 70 },
-  ];
+  const handleAssign = async () => {
+    if (!form.truck_name || !form.source || !form.destination) {
+      alert("Fill all fields");
+      return;
+    }
 
-  const routes = [
-    {
-      id: "RT-2023-089",
-      distance: 452.5,
-      load: 12.4,
-      emissions: 89.2,
-      savings: "14.2%",
-      status: "High savings",
-    },
-    {
-      id: "RT-2023-104",
-      distance: 680.2,
-      load: 18.5,
-      emissions: 142.1,
-      savings: "0.0%",
-      status: "Standard",
-    },
-  ];
+    /* 1️⃣ Fetch idle drivers */
+    const { data: drivers, error } = await supabase
+      .from("driver")
+      .select("driver_id, driver_name, vehicle_type, status")
+      .eq("status", "idle");
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    /* 2️⃣ Find first matching driver */
+    const driver = drivers.find(
+      (d) =>
+        d.vehicle_type?.toLowerCase() === form.truck_name.toLowerCase()
+    );
+
+    if (!driver) {
+      alert("No available driver for this truck");
+      return;
+    }
+
+    /* 3️⃣ Create shipment */
+    const { error: shipmentError } = await supabase
+      .from("shipment")
+      .insert([
+        {
+          truck_name: form.truck_name,
+          source: form.source,
+          destination: form.destination,
+          driver_id: driver.driver_id,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+
+    if (shipmentError) {
+      alert(shipmentError.message);
+      return;
+    }
+
+    /* 4️⃣ Update driver status */
+    const { error: updateError } = await supabase
+      .from("driver")
+      .update({ status: "in_trip" })
+      .eq("driver_id", driver.driver_id);
+
+    if (updateError) {
+      alert(updateError.message);
+      return;
+    }
+
+    /* 5️⃣ Show success popup */
+    setAssignedDriver(driver);
+    setShowPopup(true);
+  };
 
   return (
-    <>
-      {/* ===== TOP HEADER ===== */}
-      <div className="top-header">
-        <div className="brand">
-          <h1>RESILION</h1>
-          <span>Intelligent | Adaptive | Resilient</span>
-        </div>
+    <div className="shipment-card">
+      <h2>Create Shipment</h2>
 
-        <div className="top-icons">
-          <span>🔔</span>
-          <span>⚙️</span>
-
-          <div className="profile-wrapper">
-            <div
-              className="avatar"
-              onClick={() => setShowProfile(!showProfile)}
-            >
-              A
-            </div>
-
-            {showProfile && (
-              <div className="profile-dropdown">
-                <div className="profile-preview">Admin</div>
-                <button>Profile</button>
-                <button>Settings</button>
-                <button className="logout">Logout</button>
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Truck Name */}
+      <div className="form-group">
+        <label>Truck Name *</label>
+        <select
+          value={form.truck_name}
+          onChange={(e) =>
+            setForm({ ...form, truck_name: e.target.value })
+          }
+        >
+          <option value="">Select Truck</option>
+          <option value="Truck">Truck</option>
+          <option value="Mini Truck">Mini Truck</option>
+          <option value="Container">Container</option>
+          <option value="Trailer">Trailer</option>
+          <option value="Tanker">Tanker</option>
+        </select>
       </div>
 
-      {/* ===== NAV PILLS ===== */}
-      <div className="nav-pills">
-        <button>Dashboard</button>
-        <button>Idle Vehicles</button>
-        <button>Vehicle Assignment</button>
-        <button className="active">Co2 Calculator</button>
-        <button>Reports</button>
-        <button>Driver Assignment</button>
-      </div>
-
-      {/* ===== PAGE CONTENT ===== */}
-      <div className="ec-page">
-        {/* OVERVIEW */}
-        <section className="ec-overview">
-          <h2>Overview</h2>
-          <p>Fleet efficiency, emissions, and utilization at a glance.</p>
-        </section>
-
-        {/* METRICS */}
-        <section className="ec-metrics">
-          {metrics.map((m, i) => (
-            <div className="metric-card" key={i}>
-              <span>{m.title}</span>
-              <h3>{m.value}</h3>
-              <p>{m.sub}</p>
-            </div>
+      {/* Source */}
+      <div className="form-group">
+        <label>Source *</label>
+        <select
+          value={form.source}
+          onChange={(e) =>
+            setForm({ ...form, source: e.target.value })
+          }
+        >
+          <option value="">Select Source</option>
+          {cities.map((city) => (
+            <option key={city}>{city}</option>
           ))}
-        </section>
-
-        {/* CHARTS */}
-        <section className="ec-charts">
-          <div className="chart-card wide">
-            <h3>Emissions Over Time</h3>
-            <div className="mock-line-chart">
-              <span className="baseline" />
-              <span className="optimized" />
-            </div>
-            <div className="legend">
-              <span className="dot baseline-dot" /> Baseline
-              <span className="dot optimized-dot" /> Optimized
-            </div>
-          </div>
-
-          <div className="chart-card">
-            <h3>Vehicle Utilization</h3>
-            <div className="bar-chart">
-              {utilization.map((v) => (
-                <div key={v.id} className="bar-group">
-                  <div
-                    className={`bar ${v.best ? "best" : ""}`}
-                    style={{ height: `${v.value}%` }}
-                  />
-                  <span>{v.id}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* TABLE */}
-        <section className="ec-table">
-          <div className="table-header">
-            <h3>Route Optimization Insights</h3>
-            <button className="export-btn">Export CSV</button>
-          </div>
-
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Route ID</th>
-                  <th>Distance</th>
-                  <th>Load</th>
-                  <th>Emissions</th>
-                  <th>Savings</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {routes.map((r) => (
-                  <tr key={r.id}>
-                    <td>{r.id}</td>
-                    <td>{r.distance}</td>
-                    <td>{r.load}</td>
-                    <td>{r.emissions}</td>
-                    <td className="green">{r.savings}</td>
-                    <td>
-                      <span
-                        className={`badge ${r.status
-                          .toLowerCase()
-                          .replace(" ", "-")}`}
-                      >
-                        {r.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        </select>
       </div>
-    </>
+
+      {/* Destination */}
+      <div className="form-group">
+        <label>Destination *</label>
+        <select
+          value={form.destination}
+          onChange={(e) =>
+            setForm({ ...form, destination: e.target.value })
+          }
+        >
+          <option value="">Select Destination</option>
+          {cities.map((city) => (
+            <option key={city}>{city}</option>
+          ))}
+        </select>
+      </div>
+
+      <button className="assign-btn" onClick={handleAssign}>
+        Assign
+      </button>
+
+      {/* ================= SUCCESS POPUP ================= */}
+      {showPopup && assignedDriver && (
+        <div className="popup-overlay">
+          <div className="popup-card">
+            <h3>✅ Driver Assigned Successfully</h3>
+
+            <p>
+              <strong>Driver ID:</strong> {assignedDriver.driver_id}
+            </p>
+            <p>
+              <strong>Driver Name:</strong> {assignedDriver.driver_name}
+            </p>
+
+            <button
+              className="assign-btn"
+              onClick={() => navigate("/admin-dashboard")}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

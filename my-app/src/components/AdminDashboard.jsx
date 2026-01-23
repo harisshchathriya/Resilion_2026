@@ -111,7 +111,7 @@ export default function AdminDashboard() {
           className={`nav-btn ${isActive("/driver-assignment") ? "active" : ""}`}
           onClick={() => navigate("/driver-assignment")}
         >
-          Driver Assignment
+          Add Driver
         </button>
       </nav>
 

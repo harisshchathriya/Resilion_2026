@@ -7,49 +7,51 @@ export default function Login() {
   const location = useLocation();
   const role = new URLSearchParams(location.search).get("role");
 
-  const [name, setName] = useState("");      // only for driver
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  /* COMMON STATE */
   const [loading, setLoading] = useState(false);
 
-  /* ---------------- REDIRECT IF ROLE MISSING ---------------- */
+  /* DRIVER STATE */
+  const [username, setUsername] = useState("");
+  const [driverPassword, setDriverPassword] = useState("");
+
+  /* ADMIN / WAREHOUSE STATE */
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  /* REDIRECT IF ROLE MISSING */
   useEffect(() => {
     if (!role) navigate("/roles");
   }, [role, navigate]);
 
-  /* ---------------- CHECK EXISTING SESSION ---------------- */
-  // useEffect(() => {
-  //   const checkSession = async () => {
-  //     const { data } = await supabase.auth.getSession();
-  //     if (data.session) {
-  //       // Check user role from database and redirect accordingly
-  //       const user = data.session.user;
-        
-  //       // Check if user is in drivers table
-  //       const { data: driver } = await supabase
-  //         .from("drivers")
-  //         .select("*")
-  //         .eq("email", user.email)
-  //         .single();
-        
-  //       if (driver) {
-  //         navigate("/map"); // Driver goes to map
-  //       } else {
-  //         navigate("/admin-dashboard"); // Admin goes to admin dashboard
-  //       }
-  //     }
-  //   };
-    
-  //   checkSession();
-  // }, [navigate]);
-
-  /* ---------------- LOGIN HANDLER ---------------- */
-  const handleLogin = async (e) => {
+  /* ================= DRIVER LOGIN ================= */
+  const handleDriverLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    // 1️⃣ Supabase Auth login
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase
+      .from("driver")
+      .select("driver_id")
+      .eq("u_n", username)
+      .eq("password", Number(driverPassword))
+      .single();
+
+    if (error || !data) {
+      alert("Invalid username or password");
+      setLoading(false);
+      return;
+    }
+
+    console.log("Driver logged in:", data.driver_id);
+    navigate("/driver-dashboard");
+    setLoading(false);
+  };
+
+  /* ================= ADMIN / WAREHOUSE LOGIN ================= */
+  const handleAuthLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -60,41 +62,12 @@ export default function Login() {
       return;
     }
 
-    const user = data.user;
-    console.log("User logged in:", user.email);
-
-    // 2️⃣ DRIVER FLOW
-    if (role === "driver") {
-      if (!name) {
-        alert("Driver name is required");
-        setLoading(false);
-        return;
-      }
-
-      // Ensure driver profile exists
-      const { error: driverError } = await supabase
-        .from("drivers")
-        .upsert({
-          id: user.id,
-          name: name,
-          email: email,
-        });
-
-      if (driverError) {
-        console.error(driverError);
-        alert("Failed to save driver profile");
-        setLoading(false);
-        return;
-      }
-
-      console.log("Driver logged in, redirecting to /map");
-      navigate("/map");
+    if (role === "admin") {
+      navigate("/admin-dashboard");
     }
 
-    // 3️⃣ ADMIN FLOW
-    if (role === "admin") {
-      console.log("Admin logged in, redirecting to /admin-dashboard");
-      navigate("/admin-dashboard");
+    if (role === "warehouse") {
+      navigate("/warehouse-dashboard");
     }
 
     setLoading(false);
@@ -160,10 +133,6 @@ export default function Login() {
           font-size: 16px;
         }
 
-        .auth-card input::placeholder {
-          color: rgba(255, 255, 255, 0.6);
-        }
-
         .auth-card button {
           background: linear-gradient(135deg, #7600bc, #8a00c2);
           border: none;
@@ -174,31 +143,11 @@ export default function Login() {
           font-weight: 600;
           font-size: 16px;
           margin-top: 10px;
-          transition: all 0.3s ease;
-        }
-
-        .auth-card button:hover:not(:disabled) {
-          background: linear-gradient(135deg, #8a00c2, #9c00d6);
-          transform: translateY(-2px);
-          box-shadow: 0 4px 15px rgba(138, 0, 194, 0.4);
         }
 
         .auth-card button:disabled {
           opacity: 0.6;
           cursor: not-allowed;
-        }
-
-        .back-link {
-          display: inline-block;
-          margin-top: 20px;
-          color: #b39ddb;
-          text-decoration: none;
-          font-size: 14px;
-          transition: color 0.3s;
-        }
-
-        .back-link:hover {
-          color: #d1c4e9;
         }
 
         .role-badge {
@@ -215,53 +164,69 @@ export default function Login() {
       <div className="auth-page">
         <div className="auth-card">
           <h2>
-            {role === "admin" ? "Admin Login" : "Driver Login"}
+            {role === "driver"
+              ? "Driver Login"
+              : role === "warehouse"
+              ? "Warehouse Login"
+              : "Admin Login"}
             <span className="role-badge">{role}</span>
           </h2>
+
           <p className="subtitle">
-            {role === "admin"
-              ? "Manage supply chain operations"
-              : "Access your shipment & routes"}
+            {role === "driver"
+              ? "Login using driver credentials"
+              : "Login using email & password"}
           </p>
 
-          <form onSubmit={handleLogin}>
-            {/* DRIVER NAME (ONLY FOR DRIVER) */}
-            {role === "driver" && (
+          {/* DRIVER LOGIN FORM */}
+          {role === "driver" && (
+            <form onSubmit={handleDriverLogin}>
               <input
                 type="text"
-                placeholder="Driver Name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                placeholder="Username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
               />
-            )}
 
-            <input
-              type="email"
-              placeholder="Email address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+              <input
+                type="password"
+                placeholder="4-digit Password"
+                value={driverPassword}
+                onChange={(e) => setDriverPassword(e.target.value)}
+                required
+              />
 
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+              <button type="submit" disabled={loading}>
+                {loading ? "Logging in..." : "Login"}
+              </button>
+            </form>
+          )}
 
-            <button type="submit" disabled={loading}>
-              {loading
-                ? "Logging in..."
-                : `Login as ${role === "admin" ? "Admin" : "Driver"}`}
-            </button>
-          </form>
+          {/* ADMIN / WAREHOUSE LOGIN FORM */}
+          {(role === "admin" || role === "warehouse") && (
+            <form onSubmit={handleAuthLogin}>
+              <input
+                type="email"
+                placeholder="Email address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
 
-          <a href="/roles" className="back-link">
-            ← Back to role selection
-          </a>
+              <input
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+
+              <button type="submit" disabled={loading}>
+                {loading ? "Logging in..." : "Login"}
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </>
