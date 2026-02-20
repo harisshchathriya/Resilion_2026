@@ -1,262 +1,321 @@
-import React, { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import "./AdminDashboard.css";
+import React, { useEffect, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
+import { LoadScript } from "@react-google-maps/api";
 
-/* ---------------- MOCK DATA ---------------- */
-const activeShipments = [
-  { id: "SHP-101", location: "Chennai", eta: "Today 6:30 PM", status: "In-Transit" },
-  { id: "SHP-102", location: "Bangalore", eta: "Tomorrow 9:00 AM", status: "Delayed" },
-  { id: "SHP-103", location: "Trichy", eta: "Delivered", status: "Delivered" },
-];
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
-const vehicles = [
-  { id: "VH-01", name: "Ashok Leyland", capacity: "12 Tons", goods: "Electronics", driver: "Ravi Kumar", status: "Active" },
-  { id: "VH-02", name: "Tata Ace", capacity: "2 Tons", goods: "FMCG", driver: "Suresh", status: "Idle" },
-  { id: "VH-03", name: "Eicher Pro", capacity: "8 Tons", goods: "Machinery", driver: "Manoj", status: "Maintenance" },
-];
+const AdminDashboard = () => {
+  const [drivers, setDrivers] = useState([]);
+  const [claims, setClaims] = useState([]);
+  const [source, setSource] = useState("");
+  const [destination, setDestination] = useState("");
+  const [selectedDriver, setSelectedDriver] = useState("");
+  const [loading, setLoading] = useState(false);
 
-const inboundShipments = [
-  { id: "IN-201", supplier: "ABC Pvt Ltd", items: "Steel Rods", time: "11:30 AM", status: "On Route" },
-  { id: "IN-202", supplier: "XYZ Corp", items: "Auto Parts", time: "2:00 PM", status: "Arrived" },
-];
+  useEffect(() => {
+    fetchDrivers();
+    fetchPendingClaims();
+  }, []);
 
-const outboundShipments = [
-  { id: "OUT-301", supplier: "Retail Hub", items: "Consumer Goods", time: "4:00 PM", status: "Dispatched" },
-  { id: "OUT-302", supplier: "Warehouse B", items: "Medical Supplies", time: "6:30 PM", status: "Pending" },
-];
+  const fetchDrivers = async () => {
+    const { data } = await supabase
+      .from("drivers")
+      .select("*")
+      .eq("status", "AVAILABLE");
 
-export default function AdminDashboard() {
-  const [showMenu, setShowMenu] = useState(false);
-  const navigate = useNavigate();
-  const location = useLocation();
+    setDrivers(data || []);
+  };
 
-  const isActive = (path) => location.pathname === path;
+  // ✅ STEP 1: Updated fetchPendingClaims with explicit field selection including risk_score
+  const fetchPendingClaims = async () => {
+    const { data, error } = await supabase
+      .from("claims")
+      .select(`
+        id,
+        system_calculated_value,
+        dispute_reason,
+        dispute_description,
+        proof_image_url,
+        risk_score,
+        created_at,
+        drivers(name, vehicle_id),
+        trips(source, destination)
+      `)
+      .eq("validation_status", "pending_review")
+      .order("created_at", { ascending: false });
 
-  const handleLogout = () => {
-    // Add logout logic here
-    navigate("/roles");
+    if (!error) setClaims(data || []);
+  };
+
+  // ✅ STEP 4: Updated approveClaim with risk score check
+  const approveClaim = async (id) => {
+    const claim = claims.find(c => c.id === id);
+    
+    // 🔥 Auto block high risk claims (risk_score >= 80)
+    if (claim.risk_score >= 80) {
+      alert("❌ Cannot auto-approve high risk claim (Risk Score ≥ 80). This claim requires manual investigation.");
+      return;
+    }
+    
+    // ⚠ Warning for medium-high risk (risk_score >= 70)
+    if (claim.risk_score >= 70) {
+      const confirmApprove = window.confirm(
+        `⚠ High Risk Claim (Score: ${claim.risk_score})! Please review carefully.\n\nDo you still want to approve?`
+      );
+      if (!confirmApprove) return;
+    }
+
+    await supabase
+      .from("claims")
+      .update({
+        approved: true,
+        validation_status: "approved_by_admin",
+      })
+      .eq("id", id);
+
+    fetchPendingClaims();
+  };
+
+  const rejectClaim = async (id) => {
+    await supabase
+      .from("claims")
+      .update({
+        approved: false,
+        validation_status: "rejected_by_admin",
+      })
+      .eq("id", id);
+
+    fetchPendingClaims();
+  };
+
+  const calculateRoute = () => {
+    return new Promise((resolve, reject) => {
+      const directionsService = new window.google.maps.DirectionsService();
+
+      directionsService.route(
+        {
+          origin: source,
+          destination: destination,
+          travelMode: window.google.maps.TravelMode.DRIVING,
+        },
+        (result, status) => {
+          if (status === "OK") {
+            const leg = result.routes[0].legs[0];
+
+            resolve({
+              distance_km: leg.distance.value / 1000,
+              duration_minutes: leg.duration.value / 60,
+            });
+          } else {
+            reject("Route not found");
+          }
+        }
+      );
+    });
+  };
+
+  const handleAssignTrip = async () => {
+    if (!source || !destination || !selectedDriver) {
+      alert("Fill all fields");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const routeData = await calculateRoute();
+
+      await supabase.from("trips").insert({
+        source,
+        destination,
+        driver_id: selectedDriver,
+        planned_distance_km: routeData.distance_km,
+        planned_duration_minutes: routeData.duration_minutes,
+        status: "ASSIGNED",
+      });
+
+      await supabase
+        .from("drivers")
+        .update({ status: "ASSIGNED" })
+        .eq("id", selectedDriver);
+
+      alert("Trip Assigned Successfully!");
+      setSource("");
+      setDestination("");
+      setSelectedDriver("");
+      fetchDrivers();
+    } catch (err) {
+      console.error(err);
+      alert("Error assigning trip");
+    }
+
+    setLoading(false);
   };
 
   return (
-    <div className="admin-container">
-      {/* HEADER */}
-      <header className="header">
-        <div className="logo-section">
-          <h1 className="logo">RESILION</h1>
-          <span className="tagline">Intelligent | Adaptive | Resilient</span>
+    <LoadScript googleMapsApiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
+      <div style={{ padding: "30px" }}>
+        <h2>Admin Dashboard</h2>
+
+        {/* ================= ASSIGN TRIP ================= */}
+        <h3>Assign Trip</h3>
+
+        <div>
+          <label>Source:</label>
+          <input value={source} onChange={(e) => setSource(e.target.value)} />
         </div>
 
-        <div className="profile-section">
-          <div
-            className="profile-icon"
-            onClick={() => setShowMenu(!showMenu)}
+        <div>
+          <label>Destination:</label>
+          <input value={destination} onChange={(e) => setDestination(e.target.value)} />
+        </div>
+
+        <div>
+          <label>Select Driver:</label>
+          <select
+            value={selectedDriver}
+            onChange={(e) => setSelectedDriver(e.target.value)}
           >
-            👤
-          </div>
-          {showMenu && (
-            <div className="profile-dropdown">
-              <img
-                src="https://i.pravatar.cc/100"
-                alt="profile"
-                className="avatar"
-              />
-              <ul>
-                <li>Profile</li>
-                <li>Settings</li>
-                <li className="logout" onClick={handleLogout}>Logout</li>
-              </ul>
-            </div>
-          )}
-        </div>
-      </header>
-
-      {/* NAVIGATION */}
-      <nav className="nav-bar">
-        <button
-          className={`nav-btn ${isActive("/admin-dashboard") ? "active" : ""}`}
-          onClick={() => navigate("/admin-dashboard")}
-        >
-          Dashboard
-        </button>
-
-        <button
-          className={`nav-btn ${isActive("/idle-vehicles") ? "active" : ""}`}
-          onClick={() => navigate("/idle-vehicles")}
-        >
-          Idle Vehicles
-        </button>
-
-        <button
-          className={`nav-btn ${isActive("/assign-vehicles") ? "active" : ""}`}
-          onClick={() => navigate("/assign-vehicles")}
-        >
-          Vehicle Assignment
-        </button>
-
-        <button
-          className={`nav-btn ${isActive("/emission-calculator") ? "active" : ""}`}
-          onClick={() => navigate("/emission-calculator")}
-        >
-          CO₂ Calculator
-        </button>
-
-        <button
-          className={`nav-btn ${isActive("/reports") ? "active" : ""}`}
-          onClick={() => navigate("/reports")}
-        >
-          Reports
-        </button>
-        
-        <button
-          className={`nav-btn ${isActive("/driver-assignment") ? "active" : ""}`}
-          onClick={() => navigate("/driver-assignment")}
-        >
-          Add Driver
-        </button>
-      </nav>
-
-      {/* MAIN CONTENT */}
-      <main className="dashboard">
-        <div className="welcome-section">
-          <h1>Admin Dashboard</h1>
-          <p className="subtitle">Manage your logistics operations efficiently</p>
+            <option value="">-- Select Driver --</option>
+            {drivers.map((driver) => (
+              <option key={driver.id} value={driver.id}>
+                {driver.name}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <section className="card">
-          <div className="card-header">
-            <h2>Active Shipments</h2>
-            <span className="badge count-badge">{activeShipments.length}</span>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Location</th>
-                <th>ETA</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activeShipments.map((s) => (
-                <tr key={s.id}>
-                  <td>{s.id}</td>
-                  <td>{s.location}</td>
-                  <td>{s.eta}</td>
-                  <td>
-                    <span className={`badge ${s.status.toLowerCase()}`}>
-                      {s.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+        <button onClick={handleAssignTrip} disabled={loading}>
+          {loading ? "Assigning..." : "Assign Trip"}
+        </button>
 
-        <section className="card">
-          <div className="card-header">
-            <h2>Vehicle Management</h2>
-            <span className="badge count-badge">{vehicles.length}</span>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Capacity</th>
-                <th>Goods</th>
-                <th>Driver</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vehicles.map((v) => (
-                <tr key={v.id}>
-                  <td>{v.id}</td>
-                  <td>{v.name}</td>
-                  <td>{v.capacity}</td>
-                  <td>{v.goods}</td>
-                  <td>{v.driver}</td>
-                  <td>
-                    <span className={`badge ${v.status.toLowerCase()}`}>
-                      {v.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+        {/* ================= CLAIM REVIEW ================= */}
+        <hr style={{ margin: "40px 0" }} />
 
-        <section className="split">
-          <div className="card">
-            <div className="card-header">
-              <h2>Inbound Shipments</h2>
-              <span className="badge count-badge blue">{inboundShipments.length}</span>
+        <h3>Pending Claim Reviews</h3>
+
+        {claims.length === 0 ? (
+          <p>No pending claims.</p>
+        ) : (
+          claims.map((claim) => (
+            <div
+              key={claim.id}
+              // ✅ STEP 2: Dynamic styling based on risk_score
+              style={{
+                background:
+                  claim.risk_score >= 60
+                    ? "#ffe5e5"
+                    : claim.risk_score >= 30
+                    ? "#fff4e5"
+                    : "#f4f2fb",
+                border:
+                  claim.risk_score >= 60
+                    ? "2px solid red"
+                    : claim.risk_score >= 30
+                    ? "2px solid orange"
+                    : "1px solid #ddd",
+                padding: "20px",
+                borderRadius: "12px",
+                marginBottom: "20px",
+              }}
+            >
+              <p><strong>Driver:</strong> {claim.drivers?.name}</p>
+              <p><strong>Vehicle:</strong> {claim.drivers?.vehicle_id}</p>
+              <p>
+                <strong>Trip:</strong>{" "}
+                {claim.trips?.source} → {claim.trips?.destination}
+              </p>
+              <p><strong>Amount:</strong> ₹{claim.system_calculated_value}</p>
+              
+              {/* ✅ STEP 3: Risk Score Display */}
+              <p>
+                <strong>Risk Score:</strong>{" "}
+                <span
+                  style={{
+                    fontWeight: "bold",
+                    color:
+                      claim.risk_score >= 60
+                        ? "red"
+                        : claim.risk_score >= 30
+                        ? "orange"
+                        : "green",
+                  }}
+                >
+                  {claim.risk_score || 0}
+                </span>
+              </p>
+              
+              <p><strong>Dispute Reason:</strong> {claim.dispute_reason}</p>
+              <p><strong>Description:</strong> {claim.dispute_description}</p>
+
+              {claim.proof_image_url && (
+                <img
+                  src={claim.proof_image_url}
+                  alt="Proof"
+                  style={{ width: 250, marginTop: 10, borderRadius: 8 }}
+                />
+              )}
+
+              <p style={{ fontSize: 12, color: "#666" }}>
+                🕒 {new Date(claim.created_at).toLocaleString()}
+              </p>
+
+              <div style={{ marginTop: 15 }}>
+                <button
+                  onClick={() => approveClaim(claim.id)}
+                  style={{
+                    padding: "8px 16px",
+                    background: "green",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 6,
+                    marginRight: 10,
+                    cursor: "pointer",
+                    opacity: claim.risk_score >= 80 ? 0.5 : 1,
+                  }}
+                  disabled={claim.risk_score >= 80}
+                  title={claim.risk_score >= 80 ? "High risk claims cannot be auto-approved" : ""}
+                >
+                  ✅ Approve
+                </button>
+
+                <button
+                  onClick={() => rejectClaim(claim.id)}
+                  style={{
+                    padding: "8px 16px",
+                    background: "red",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                  }}
+                >
+                  ❌ Reject
+                </button>
+              </div>
+              
+              {/* ✅ Additional warning badge for high risk */}
+              {claim.risk_score >= 70 && (
+                <p style={{
+                  marginTop: "10px",
+                  color: claim.risk_score >= 80 ? "darkred" : "orange",
+                  fontWeight: "bold",
+                  fontSize: "14px"
+                }}>
+                  {claim.risk_score >= 80 
+                    ? "⛔ HIGH RISK - Auto-approval blocked" 
+                    : "⚠ HIGH RISK - Review carefully"}
+                </p>
+              )}
             </div>
-            <table>
-              <tbody>
-                {inboundShipments.map((s) => (
-                  <tr key={s.id}>
-                    <td>{s.id}</td>
-                    <td>{s.supplier}</td>
-                    <td>{s.items}</td>
-                    <td>{s.time}</td>
-                    <td>
-                      <span className={`badge ${s.status.toLowerCase().replace(' ', '-')}`}>
-                        {s.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="card">
-            <div className="card-header">
-              <h2>Outbound Shipments</h2>
-              <span className="badge count-badge orange">{outboundShipments.length}</span>
-            </div>
-            <table>
-              <tbody>
-                {outboundShipments.map((s) => (
-                  <tr key={s.id}>
-                    <td>{s.id}</td>
-                    <td>{s.supplier}</td>
-                    <td>{s.items}</td>
-                    <td>{s.time}</td>
-                    <td>
-                      <span className={`badge ${s.status.toLowerCase()}`}>
-                        {s.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        {/* Quick Stats */}
-        <section className="quick-stats">
-          <div className="stat-card">
-            <h3>Total Vehicles</h3>
-            <p className="stat-number">{vehicles.length}</p>
-            <span className="stat-label">Active: 1 | Idle: 1 | Maintenance: 1</span>
-          </div>
-          <div className="stat-card">
-            <h3>Total Shipments</h3>
-            <p className="stat-number">{activeShipments.length + inboundShipments.length + outboundShipments.length}</p>
-            <span className="stat-label">Active: 3 | Inbound: 2 | Outbound: 2</span>
-          </div>
-          <div className="stat-card">
-            <h3>System Status</h3>
-            <p className="stat-number status-good">Operational</p>
-            <span className="stat-label">All systems running</span>
-          </div>
-        </section>
-      </main>
-    </div>
+          ))
+        )}
+      </div>
+    </LoadScript>
   );
-}
+};
+
+export default AdminDashboard;

@@ -1,3 +1,15 @@
+/* ================= GLOBAL ================= */
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
 /* ================= PAGE ================= */
 .dashboard-page {
   padding: 30px 40px;
@@ -61,17 +73,19 @@
 
 /* ================= WEEKLY ACTIVITY ================= */
 .weekly-chart {
-  height: 260px;
+  height: auto;
+  min-height: 260px;
   display: flex;
   align-items: flex-end;
   gap: 10px;
   padding: 10px;
   background: #faf9ff;
   border-radius: 14px;
+  overflow-x: auto;
 }
 
 .day-column {
-  flex: 1;
+  min-width: 40px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -79,7 +93,7 @@
 }
 
 .bar-group {
-  height: 200px; /* IMPORTANT */
+  height: 200px;
   width: 100%;
   display: flex;
   align-items: flex-end;
@@ -89,7 +103,7 @@
 
 .bar {
   width: 16px;
-  min-height: 6px; /* MAKES SMALL VALUES VISIBLE */
+  min-height: 6px;
   border-radius: 6px;
   transition: height 0.4s ease;
 }
@@ -114,6 +128,7 @@
   gap: 18px;
   font-size: 13px;
   margin-top: 10px;
+  flex-wrap: wrap;
 }
 
 .dot {
@@ -207,16 +222,69 @@
   cursor: pointer;
   box-shadow: 0 12px 30px rgba(106, 0, 255, 0.4);
   animation: pulse 1.6s infinite;
+  z-index: 999;
 }
 
+/* ================= ANIMATION ================= */
 @keyframes pulse {
-  0% {
-    transform: scale(1);
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+/* ================================================= */
+/* ================= MOBILE SUPPORT ================= */
+/* ================================================= */
+
+@media (max-width: 1024px) {
+  .kpi-row {
+    grid-template-columns: repeat(2, 1fr);
   }
-  50% {
-    transform: scale(1.1);
+
+  .two-col {
+    grid-template-columns: 1fr;
   }
-  100% {
-    transform: scale(1);
+}
+
+@media (max-width: 768px) {
+  .dashboard-page {
+    padding: 16px;
+  }
+
+  .kpi-row {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .section {
+    padding: 16px;
+  }
+
+  .dist-row,
+  .util-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .floating-btn {
+    bottom: 20px;
+    right: 20px;
+    width: 54px;
+    height: 54px;
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-page h2 {
+    font-size: 18px;
+  }
+
+  .kpi-card h3 {
+    font-size: 20px;
+  }
+
+  .weekly-chart {
+    padding: 8px;
   }
 }

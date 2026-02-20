@@ -126,7 +126,7 @@ export default function RoleSelect() {
         <div className="role-container">
           <div
             className="role-card"
-            onClick={() => navigate("/login?role=driver")}
+            onClick={() => navigate("/driver_login")}
           >
             <h2>🚚 Driver Login</h2>
             <p>Access shipment & route details</p>
