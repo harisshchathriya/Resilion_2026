@@ -5,7 +5,6 @@ import {
   GoogleMap,
   LoadScript,
   Marker,
-  DirectionsRenderer,
   TrafficLayer,
 } from "@react-google-maps/api";
 
@@ -32,20 +31,13 @@ function DriverDashboard() {
   /* ================= REFS ================= */
 
   const gpsIntervalRef = useRef(null);
-  const routePathRef = useRef([]);
-  const routeIndexRef = useRef(0);
-  const destinationCoordRef = useRef(null);
   const hasAutoCompletedRef = useRef(false);
-  const animationFrameRef = useRef(null);
 
   /* ================= STATE ================= */
 
   const [driver, setDriver] = useState(null);
   const [trip, setTrip] = useState(null);
-  const [directions, setDirections] = useState(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [distanceToDestination, setDistanceToDestination] = useState(null);
-  const [remainingDistance, setRemainingDistance] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -204,9 +196,6 @@ function DriverDashboard() {
 
       // 1. Stop tracking
       stopGpsTracking();
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
 
       // 2. Update trip → COMPLETED
       const { error: tripError } = await supabase
@@ -242,8 +231,6 @@ function DriverDashboard() {
 
       // 5. Update local state
       setTrip(null);
-      setDirections(null);
-      setRemainingDistance(0);
 
       // 6. Reload dashboard
       setTimeout(async () => {
@@ -270,9 +257,6 @@ function DriverDashboard() {
     initDashboard();
     return () => {
       stopGpsTracking();
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
     };
   }, []);
 
@@ -317,11 +301,6 @@ function DriverDashboard() {
       console.log("Current trip:", tripData);
       setTrip(tripData || null);
       
-      // Set initial remaining distance to planned distance
-      if (tripData) {
-        setRemainingDistance(tripData.planned_distance_km);
-      }
-      
       hasAutoCompletedRef.current = false;
 
     } catch (err) {
@@ -333,7 +312,63 @@ function DriverDashboard() {
   };
 
   /* =========================================================
-     START TRIP
+     🔥 STEP 2 — REAL GPS TRACKING
+  ========================================================= */
+
+  const startRealGpsTracking = () => {
+    if (!trip || !driver) return;
+
+    stopGpsTracking();
+
+    gpsIntervalRef.current = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+
+          // 1️⃣ Update driver live position
+          await supabase
+            .from("drivers")
+            .update({
+              last_lat: latitude,
+              last_lng: longitude,
+              last_location_updated_at: new Date().toISOString(),
+            })
+            .eq("id", driver.id);
+
+          // 2️⃣ Update local driver state for map marker
+          setDriver(prev => ({ ...prev, last_lat: latitude, last_lng: longitude }));
+
+          // 3️⃣ Insert into GPS log table
+          await supabase
+            .from("driver_gps_logs")
+            .insert({
+              trip_id: trip.id,
+              driver_id: driver.id,
+              latitude,
+              longitude,
+            });
+
+          console.log("📍 Real GPS saved:", latitude, longitude);
+        },
+        (err) => console.log("GPS error:", err),
+        { enableHighAccuracy: true }
+      );
+    }, 5000);
+  };
+
+  /* =========================================================
+     🔥 STEP 4 — STOP TRACKING
+  ========================================================= */
+
+  const stopGpsTracking = () => {
+    if (gpsIntervalRef.current) {
+      clearInterval(gpsIntervalRef.current);
+      gpsIntervalRef.current = null;
+    }
+  };
+
+  /* =========================================================
+     🔥 STEP 3 — MODIFIED START TRIP
   ========================================================= */
 
   const startTrip = async () => {
@@ -357,7 +392,7 @@ function DriverDashboard() {
       .eq("id", driver.id);
 
     await initDashboard();
-    startGpsTracking();
+    startRealGpsTracking(); // ✅ Replaced startGpsTracking with real GPS
     setActionLoading(false);
     console.log("✅ Trip started successfully");
   };
@@ -373,9 +408,6 @@ function DriverDashboard() {
     console.log("⏹ Manually ending trip:", trip.id);
 
     stopGpsTracking();
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
 
     await supabase
       .from("trips")
@@ -394,7 +426,6 @@ function DriverDashboard() {
     await generateClaims(trip.id, driver.id);
 
     setTrip(null);
-    setDirections(null);
 
     await initDashboard();
     setActionLoading(false);
@@ -403,155 +434,10 @@ function DriverDashboard() {
     setTimeout(() => setAutoCompletionMessage(""), 3000);
   };
 
-  /* =========================================================
-     🎬 VISUAL SIMULATION LAYER
-     Uses real Google route for animation only
-     Does NOT affect financial calculations
-  ========================================================= */
-
-  useEffect(() => {
-    if (!mapLoaded || !trip) return;
-
-    // Use address strings from DB for route calculation
-    const origin = trip.source;
-    const destination = trip.destination;
-
-    console.log("📍 Calculating visual route from:", origin);
-    console.log("📍 Calculating visual route to:", destination);
-
-    const service = new window.google.maps.DirectionsService();
-
-    service.route(
-      {
-        origin,
-        destination,
-        travelMode: window.google.maps.TravelMode.DRIVING,
-      },
-      (result, status) => {
-        if (status === "OK") {
-          setDirections(result);
-          routePathRef.current = result.routes[0].overview_path;
-          routeIndexRef.current = 0;
-          
-          if (result.routes[0].legs[0].end_location) {
-            destinationCoordRef.current = result.routes[0].legs[0].end_location;
-          }
-          
-          console.log("✅ Visual route calculated successfully");
-          console.log("📍 Total route points:", routePathRef.current.length);
-        } else {
-          console.error("❌ Route calculation error:", status);
-        }
-      }
-    );
-  }, [mapLoaded, trip]);
-
-  /* =========================================================
-     🎬 SMOOTH ANIMATION ALONG REAL PATH
-     Visual movement only - doesn't affect financials
-  ========================================================= */
-
-  const animateTruck = () => {
-    const path = routePathRef.current;
-    if (!path || path.length === 0 || !trip || trip.status !== "STARTED") return;
-
-    // Move truck along the path
-    if (routeIndexRef.current < path.length - 1) {
-      routeIndexRef.current += 1; // Smooth movement
-    }
-
-    const point = path[routeIndexRef.current];
-    if (!point) return;
-
-    const lat = point.lat();
-    const lng = point.lng();
-
-    // Update driver location for visual display
-    setDriver(prev => ({ ...prev, last_lat: lat, last_lng: lng }));
-
-    // 🔥 IMPORTANT: Calculate remaining distance based on path progress
-    // This uses planned_distance_km from DB (financial layer)
-    // and multiplies by visual progress (simulation layer)
-    const progress = routeIndexRef.current / path.length;
-    const calculatedRemaining = trip.planned_distance_km * (1 - progress);
-    setRemainingDistance(calculatedRemaining);
-
-    // Check if destination reached
-    const distanceToEnd = calculateDistanceToEnd(point, path[path.length - 1]);
-    if (distanceToEnd < 0.5 && trip.status === "STARTED" && !hasAutoCompletedRef.current) {
-      console.log("🎯 DESTINATION REACHED!");
-      autoCompleteTrip();
-      return;
-    }
-
-    // Continue animation
-    animationFrameRef.current = requestAnimationFrame(animateTruck);
-  };
-
-  const calculateDistanceToEnd = (currentPoint, endPoint) => {
-    // Simple Haversine formula for distance calculation
-    const R = 6371; // Earth's radius in km
-    const lat1 = currentPoint.lat() * Math.PI / 180;
-    const lat2 = endPoint.lat() * Math.PI / 180;
-    const dLat = (endPoint.lat() - currentPoint.lat()) * Math.PI / 180;
-    const dLng = (endPoint.lng() - currentPoint.lng()) * Math.PI / 180;
-
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1) * Math.cos(lat2) *
-              Math.sin(dLng/2) * Math.sin(dLng/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-  };
-
-  /* =========================================================
-     GPS TRACKING - Now only for database updates
-  ========================================================= */
-
-  const startGpsTracking = () => {
-    stopGpsTracking();
-
-    console.log("📍 Starting GPS tracking");
-    
-    // Start visual animation
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-    animationFrameRef.current = requestAnimationFrame(animateTruck);
-
-    // Update database every 10 seconds with current position
-    gpsIntervalRef.current = setInterval(async () => {
-      if (!driver?.last_lat || !driver?.last_lng || !trip) return;
-
-      await supabase
-        .from("drivers")
-        .update({
-          last_lat: driver.last_lat,
-          last_lng: driver.last_lng,
-          last_location_updated_at: new Date().toISOString(),
-        })
-        .eq("id", driver.id);
-
-      console.log(`📍 GPS position saved: ${driver.last_lat.toFixed(5)}, ${driver.last_lng.toFixed(5)}`);
-      
-    }, 10000); // Update DB every 10 seconds
-  };
-
-  const stopGpsTracking = () => {
-    if (gpsIntervalRef.current) {
-      clearInterval(gpsIntervalRef.current);
-      gpsIntervalRef.current = null;
-    }
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    console.log("🛑 Tracking stopped");
-  };
-
   /* Resume tracking if trip is started */
   useEffect(() => {
     if (trip?.status === "STARTED") {
-      startGpsTracking();
+      startRealGpsTracking();
     } else {
       stopGpsTracking();
     }
@@ -652,21 +538,6 @@ function DriverDashboard() {
         </div>
       )}
 
-      {/* 🎬 SIMULATION DISTANCE - Visual Layer */}
-      {remainingDistance !== null && trip?.status === "STARTED" && (
-        <p style={{ 
-          color: "#ff6b00", 
-          marginBottom: "20px", 
-          fontWeight: "bold",
-          background: "#fff3e0",
-          padding: "10px",
-          borderRadius: "8px"
-        }}>
-          🚚 Truck Progress: {remainingDistance.toFixed(2)} km remaining to destination
-          {remainingDistance <= 0.5 && " 🎯 Arriving now!"}
-        </p>
-      )}
-
       {/* Auto-completion Messages */}
       {autoCompletionMessage && (
         <div style={{
@@ -695,7 +566,7 @@ function DriverDashboard() {
           <GoogleMap
             mapContainerStyle={MAP_CONTAINER_STYLE}
             center={
-              // 🔧 FIX: Use default center if lat/lng are not valid numbers
+              // 🔥 STEP 5: Use default center if lat/lng are not valid numbers
               typeof driver.last_lat === "number" && typeof driver.last_lng === "number"
                 ? { lat: driver.last_lat, lng: driver.last_lng }
                 : { lat: 13.0827, lng: 80.2707 } // Default Chennai
@@ -720,21 +591,8 @@ function DriverDashboard() {
               />
             )}
 
-            {/* ROUTE LINE */}
-            {directions && (
-              <DirectionsRenderer
-                directions={directions}
-                options={{
-                  polylineOptions: {
-                    strokeColor: "#6a00ff",
-                    strokeWeight: 6,
-                  },
-                }}
-              />
-            )}
-
-            {/* MOVING TRUCK */}
-            {/* 🔧 FIX: Only render marker if lat/lng are valid numbers */}
+            {/* 🔥 STEP 5: MOVING TRUCK - Real GPS position */}
+            {/* Only render marker if lat/lng are valid numbers */}
             {typeof driver.last_lat === "number" && 
              typeof driver.last_lng === "number" && (
               <Marker
@@ -797,25 +655,6 @@ function DriverDashboard() {
             </p>
           </div>
 
-          {trip.status === "STARTED" && remainingDistance !== null && (
-            <div style={{
-              background: "#e8f4ff",
-              padding: "10px",
-              borderRadius: "8px",
-              marginTop: "10px",
-              marginBottom: "10px"
-            }}>
-              <p style={{ margin: 0, fontWeight: "bold", color: "#0066cc" }}>
-                🎬 Simulation Progress
-              </p>
-              <p style={{ margin: "5px 0 0 0", fontSize: "14px" }}>
-                {remainingDistance <= 0.5 
-                  ? "🎯 Arriving at destination NOW!"
-                  : `🚚 ${remainingDistance.toFixed(2)} km remaining (simulated)`}
-              </p>
-            </div>
-          )}
-
           <div style={{ display: "flex", gap: "12px", marginTop: "12px" }}>
             <button
               onClick={startTrip}
@@ -858,7 +697,7 @@ function DriverDashboard() {
               fontStyle: "italic"
             }}>
               ℹ️ Financial calculations use planned distance: {trip.planned_distance_km.toFixed(2)} km (fixed)<br/>
-              Visual simulation follows real Google Maps route<br/>
+              Real GPS tracking active - position updates every 5 seconds<br/>
               Upon completion: Single TOTAL_PAYOUT claim will be generated (Base Salary + Fuel Cost)
             </p>
           )}

@@ -20,6 +20,27 @@ const AdminDashboard = () => {
     fetchPendingClaims();
   }, []);
 
+  /* ================= REALTIME SUBSCRIPTION ================= */
+  // ✅ Add realtime subscription for driver updates
+  useEffect(() => {
+    const channel = supabase
+      .channel("live-driver")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "drivers",
+        },
+        () => {
+          fetchDrivers(); // Refresh drivers list when any driver updates
+        }
+      )
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, []);
+
   const fetchDrivers = async () => {
     const { data } = await supabase
       .from("drivers")
@@ -182,7 +203,7 @@ const AdminDashboard = () => {
             <option value="">-- Select Driver --</option>
             {drivers.map((driver) => (
               <option key={driver.id} value={driver.id}>
-                {driver.name}
+                {driver.name} {driver.last_lat && driver.last_lng ? "📍 Live" : ""}
               </option>
             ))}
           </select>
