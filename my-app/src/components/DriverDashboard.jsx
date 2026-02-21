@@ -45,6 +45,26 @@ function DriverDashboard() {
   const [autoCompletionMessage, setAutoCompletionMessage] = useState("");
 
   /* =========================================================
+     🟢 STEP 2 — HAVERSINE DISTANCE CALCULATION
+  ========================================================= */
+
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Earth radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) *
+      Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  /* =========================================================
      FINANCIAL LAYER - USES REAL DATA FROM DB
      NEVER DEPENDS ON SIMULATION
   ========================================================= */
@@ -349,6 +369,41 @@ function DriverDashboard() {
             });
 
           console.log("📍 Real GPS saved:", latitude, longitude);
+
+          // 🟢 STEP 3 — Calculate distance between last two points
+          // 🔥 Fetch last 2 GPS logs
+          const { data: lastPoints } = await supabase
+            .from("driver_gps_logs")
+            .select("*")
+            .eq("trip_id", trip.id)
+            .order("created_at", { ascending: false })
+            .limit(2);
+
+          if (lastPoints && lastPoints.length === 2) {
+            const p1 = lastPoints[0];
+            const p2 = lastPoints[1];
+
+            const newDistance = calculateDistance(
+              p1.latitude,
+              p1.longitude,
+              p2.latitude,
+              p2.longitude
+            );
+
+            // 🔥 Update trip actual distance
+            await supabase
+              .from("trips")
+              .update({
+                actual_distance_km:
+                  (trip.actual_distance_km || 0) + newDistance,
+              })
+              .eq("id", trip.id);
+
+            console.log("📏 Distance added:", newDistance.toFixed(4), "km");
+
+            // 🟢 STEP 4 — IMPORTANT FIX: Refresh trip to update state
+            await initDashboard();
+          }
         },
         (err) => console.log("GPS error:", err),
         { enableHighAccuracy: true }
@@ -639,6 +694,12 @@ function DriverDashboard() {
           <p><strong>Destination:</strong> {trip.destination}</p>
           <p><strong>Status:</strong> {trip.status}</p>
           
+          {/* 🟢 STEP 5 — Show Actual Distance in UI */}
+          <p>
+            <strong>Actual Distance:</strong>{" "}
+            {trip.actual_distance_km?.toFixed(2) || 0} km
+          </p>
+          
           {/* Show both real and simulated data */}
           <div style={{
             background: "#e8eaf6",
@@ -698,6 +759,7 @@ function DriverDashboard() {
             }}>
               ℹ️ Financial calculations use planned distance: {trip.planned_distance_km.toFixed(2)} km (fixed)<br/>
               Real GPS tracking active - position updates every 5 seconds<br/>
+              📏 Tracking actual distance: {trip.actual_distance_km?.toFixed(2) || 0} km traveled so far<br/>
               Upon completion: Single TOTAL_PAYOUT claim will be generated (Base Salary + Fuel Cost)
             </p>
           )}
